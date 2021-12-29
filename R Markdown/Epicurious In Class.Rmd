@@ -1,0 +1,100 @@
+---
+title: "Epicurious Analysis"
+author: "Zac Boiskin"
+date: "3/25/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r libraries, include=FALSE}
+library(tidyverse)
+library(corrplot)
+```
+In this analysis I will be exploring the epicurious dataset and learn how to apply markdown documentation. The analysis will be creating a simple model to predict a receipe's rating based on common characteristics. Here is the website link [Epicurious](http://epicurious.com). 
+
+# Dataset Cleaning
+
+```{r dataset, eval=FALSE}
+recipes <- read_csv('https://chapple-datasets.s3.amazonaws.com/epicurious.csv')
+#summary(recipes)
+```
+
+# Dataset_Logical
+```{r dataset_logical}
+recipes <- read_csv('https://chapple-datasets.s3.amazonaws.com/epicurious.csv.gz', col_types = cols(.default = "l", title='c', rating='n', calories='n', protein='n', fat='n', sodium='n'))
+#summary(recipes)
+```
+
+# Trimming the Dataset
+
+Simplify the dataset and just work with numeric variables
+
+```{r select_numerics}
+recipes <- recipes %>%
+  select(title,rating,calories,protein,fat,sodium)
+summary(recipes)
+```
+
+I notice NA values and want to address them but I will just remove them.
+
+```{r missing}
+recipes <- recipes %>%
+  filter(!is.na(calories) & !is.na(protein) & !is.na(fat) & !is.na(sodium))
+summary(recipes)
+```
+
+# Outliers
+
+We notice there are some outliers such as a recipe that has 30 million calories. We should get rid of them.
+
+```{r outlier_detection}
+recipes %>%
+  keep(is.numeric) %>%
+  gather() %>%
+  ggplot(mapping=aes(x=key, y=value)) +
+  geom_boxplot() + 
+  facet_wrap(~ key, scales='free')
+```
+
+```{r outlier_removal}
+recipes <- recipes %>%
+  filter(calories<2000 & protein < 200 & fat < 200 & sodium < 2000)
+
+recipes %>%
+  keep(is.numeric) %>%
+  gather() %>%
+  ggplot(mapping=aes(x=key, y=value)) +
+  geom_boxplot() + 
+  facet_wrap(~ key, scales='free')
+```
+
+# Creating correlation
+```{r corrplot}
+recipes %>%
+  keep(is.numeric) %>%
+  cor() %>%
+  corrplot()
+```
+
+# Now we are creating a training dataset to see how good out model is.
+```{r train_test}
+set.seed(1842)
+training_size = 0.8 * nrow(recipes)
+
+training_rows = sample(seq_len(nrow(recipes)), size=training_size)
+train <- recipes[training_rows,]
+test <- recipes[-training_rows,]
+```
+
+
+# Creating the model
+
+After training the data, now we run the model
+```{r regression}
+model <- lm(calories ~ protein + fat + sodium, data=train)
+summary(model)
+```

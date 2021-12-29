@@ -1,0 +1,134 @@
+---
+title: "Epicurious Analysis"
+author: "Mike Chapple"
+date: "1/18/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, include=FALSE}
+library(tidyverse)
+library(corrplot)
+```
+
+In this analysis, I want to examine what factors contribute to a recipe's success on [Epicurious](http://epicurious.com).  We'll build a simple model that attempts to predict a recipe's rating based upon some common characteristics.
+
+# Dataset Cleaning
+First, let's read in the dataset and take a look at it.
+
+```{r dataset, eval=FALSE}
+recipes <- read_csv('https://chapple-datasets.s3.amazonaws.com/epicurious.csv')
+#summary(recipes)
+```
+
+A few observations here.  First, that took a long time to read in because the file size was quite large.  I can compress the file to a ZIP file and it will read in faster.  I've already stored a ZIPed copy of the same file in my AWS account, so we'll use that file next time to speed things along.
+
+Second, almost all of the variables here are logical datatypes.  I don't want to write a column definition that repeats the datatype 600+ times, so I am going to read the dataset using a default column specification of type logical and then override that for the variables that have other datatypes.  Let's give that a try.
+
+```{r dataset_logical}
+recipes <- read_csv('https://chapple-datasets.s3.amazonaws.com/epicurious.csv.gz', col_types = cols(.default = "l", title='c', rating='n', calories='n', protein='n', fat='n', sodium='n'))
+#summary(recipes)
+```
+
+# Trimming the Dataset
+
+Now that I've done all of that work, I'd like to simplify my analysis.  I'm going to just work with the numeric features and lop off all the logical features.  This will allow me to try a simple linear regression.
+
+```{r select_numerics}
+recipes <- recipes %>%
+  select(title,rating,calories,protein,fat,sodium)
+summary(recipes)
+```
+
+I notice that there are a lot of NA values in my dataset.  They're going to complicate things as well. The simplest thing I can do here is to just eliminate rows with NA values, so let's do that.
+
+```{r missing}
+recipes <- recipes %>%
+  filter(!is.na(calories) & !is.na(protein) & !is.na(fat) & !is.na(sodium))
+```
+
+# Outliers
+
+The next thing I notice in that summary is that there are some outlier values.  For example, I don't think it's reasonable that a recipe would have 30 million calories! Let's plot our numeric variables.
+
+```{r outlier_detection}
+recipes %>%
+  keep(is.numeric) %>%
+  gather() %>%
+  ggplot(mapping=aes(x=key, y=value)) +
+  geom_boxplot() + 
+  facet_wrap(~ key, scales='free')
+```
+
+Let's remove any rows with values that seem too high and replot.  
+
+```{r outlier_removal}
+recipes <- recipes %>%
+  filter(calories<2000 & protein < 200 & fat < 200 & sodium < 2000)
+
+recipes %>%
+  keep(is.numeric) %>%
+  gather() %>%
+  ggplot(mapping=aes(x=key, y=value)) +
+  geom_boxplot() + 
+  facet_wrap(~ key, scales='free')
+```
+
+## Exploring the Dataset
+OK, now I have a dataset that is fairly clean. Let's move on and explore it some more. Let's see what the correlation plot looks like for this dataset.
+
+```{r corrplot}
+recipes %>%
+  keep(is.numeric) %>%
+  cor() %>%
+  corrplot()
+```
+
+This plot tells me that my original idea of building a simple model to predict ratings based upon simple nutrition facts probably won't work.  If I want to pursue the ratings prediction problem, I'd need to bring in more features or try some other techniques.  
+
+I'm going to try something else instead.  Let's see if we can predict the calories of a recipe based upon the other nutrition facts.  That seems like something that we should be able to do.
+
+## Building a Regression Model
+
+Now I'll build my regression model and see how accurately it predicts the number of calories in a recipe.
+
+# Separating test and training data
+
+Before we start building a model, I want to separate my dataset into a training dataset that will be used to create the model and a test dataset that will be used to evaluate it.  This is to prevent overfitting.  I'll put 80% of the data into the training dataset and the other 20% into a testing dataset.
+
+```{r train_test}
+set.seed(1842)
+training_size = 0.8 * nrow(recipes)
+
+training_rows = sample(seq_len(nrow(recipes)), size=training_size)
+train <- recipes[training_rows,]
+test <- recipes[-training_rows,]
+```
+
+My training dataset has `r nrow(train)` rows and my test dataset has `r nrow(test)` rows.
+
+# Creating the model
+
+OK, let's run a simple linear regression
+```{r regression}
+model <- lm(calories ~ protein + fat + sodium, data=train)
+summary(model)
+```
+
+That looks pretty good.  It's telling me that on my training dataset, the simple regression model I built was able to explain about 84% of the variance.
+
+# Evaluating the model
+
+And now let's try using that model on our test dataset and see how it performs.
+
+```{r predict}
+caloriePrediction <- predict(model, test)
+error <- caloriePrediction - test$calories
+```
+
+The RMSE for this model is `r sqrt(mean(error^2))`.  This seems like a reasonable calorie prediction error for our simple model.

@@ -1,0 +1,13 @@
+name: CollegeAnalysisLecture
+title: CollegeAnalysisLecture
+username:
+account: zboi858
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 2176450
+bundleId: 3057774
+url: https://zboi858.shinyapps.io/CollegeAnalysisLecture/
+when: 1587696956.2079
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: College table.R|Colleges App.R|R Shiny.R|shiny.pdf|shiny3.R|shiny5.R

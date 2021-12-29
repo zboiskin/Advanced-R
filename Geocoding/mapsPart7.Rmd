@@ -1,0 +1,238 @@
+---
+title: "Map Visualization"
+author: "Zac Boiskin"
+date: "4/8/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, include=FALSE}
+library(tidyverse)
+library(ggmap)
+```
+
+This week, we will explore the use of Google's map and geocoding APIs with our data.  We first need to register a Google API key.  You should change the value below to a key that you obtain for your own use.
+
+```{r api, include=FALSE}
+register_google("AIzaSyD6sGEBWl7_BS5fzkxQewe8O5cYl2mA-g8")
+```
+
+# Working with Map Data
+
+Let's begin by building a map of Chicago with the qmap function.
+
+```{r chicago_qmap, message=FALSE}
+qmap("Chicago, IL", zoom=18)
+```
+
+And now I'll try with the get_map function.
+```{r chicago_getmap, message=FALSE}
+chicago_map <- get_map("Chicago, IL", zoom=10)
+ggmap(chicago_map)
+```
+
+# Geocoding
+
+Geocoding is the process of converting a location to a latitude and longitude.  Let's try a few examples.
+
+```{r geocoding, message=FALSE}
+chicago <- geocode("Chicago, IL")
+campus <- geocode("224 S Michigan Ave, Chicago, IL")
+mendoza <- geocode("Mendoza College of Business")
+whitehouse <- geocode("White House")
+```
+
+Let's get a map of the Chicago campus now.
+
+```{r chicago_map, message=FALSE}
+chicago_map <- get_map(chicago)
+ggmap(chicago_map)
+```
+
+I can also wrap the get_map() call in a call to ggmap() and save the step of storing the map in a variable.
+
+```{r mendoza_map, message=FALSE}
+ggmap(get_map(mendoza, zoom=17))
+```
+
+# Changing Map Types
+
+We can also change the type of our maps.
+
+## Terrain Maps
+
+The default map type is terrain.
+
+```{r terrain, message=FALSE}
+rockies<-geocode("Rocky Mountain National Park")
+ggmap(get_map(rockies, zoom=9, maptype = "terrain"))
+```
+
+## Road Maps
+
+```{r road, message=FALSE}
+ggmap(get_map(rockies, zoom=9, maptype = "roadmap"))
+```
+
+## Terrain Labels
+
+```{r terrainlabel, message=FALSE}
+ggmap(get_map(rockies, zoom=9, maptype='terrain-labels'))
+```
+
+## Terrain Lines
+
+```{r terrainline, message=FALSE}
+ggmap(get_map(rockies, zoom=9, maptype='terrain-lines'))
+```
+
+## Satellite
+
+```{r satellite, message=FALSE}
+ggmap(get_map(rockies, zoom=9, maptype='satellite'))
+```
+
+## Hybrid
+
+```{r hybrid, message=FALSE}
+ggmap(get_map(rockies, zoom=9, maptype='hybrid'))
+```
+
+## Toner
+
+```{r toner, message=FALSE}
+ggmap(get_map(rockies, zoom=9, maptype='toner'))
+```
+
+## Watercolor
+```{r watercolor, message=FALSE}
+ggmap(get_map(rockies, zoom=9, maptype='watercolor'))
+```
+
+# Plotting Points on a Map
+
+Let's try plotting New York City on a map of the United States.
+
+```{r nyc_usa, message=FALSE}
+usa <- geocode('United States')
+nyc <- geocode('New York City')
+ggmap(get_map(usa, zoom=4)) +
+  geom_point(mapping=aes(x=lon, y=lat), color="red",data=nyc)
+```
+
+## Geocoding and Plotting a Vector
+
+```{r plotvector, message=FALSE}
+placenames <- c("Las Vegas", "White House", "Notre Dame", "Mt. Rushmore", "The Alamo")
+locations <- geocode(placenames)
+places <- tibble(name=placenames, lat=locations$lat,lon=locations$lon)
+ggmap(get_map(usa, zoom=4)) +
+  geom_point(mapping=aes(x=lon, y=lat), color="red",data=places)
+```
+
+## Adding Labels
+
+We can add text to our points with the geom_text geometry.
+
+```{r labels, message=FALSE}
+ggmap(get_map(usa, zoom=4)) +
+  geom_point(mapping=aes(x=lon, y=lat), color="red",data=places) +
+  geom_text(mapping=aes(x=lon, y=lat, label=name), color="red", nudge_y=1, data=places)
+```
+
+Let's see if using a toner background map would declutter this a bit.
+
+```{r usatoner, message=FALSE}
+ggmap(get_map(usa, zoom=4, maptype = "toner-background")) +
+  geom_point(mapping=aes(x=lon, y=lat), color="red",data=places) +
+  geom_text(mapping=aes(x=lon, y=lat, label=name), color="red", nudge_y=1, data=places)
+```
+
+And what would this look like in watercolor?
+
+```{r usawatercolor, message=FALSE}
+ggmap(get_map(usa, zoom=4, maptype = "watercolor")) +
+  geom_point(mapping=aes(x=lon, y=lat), color="red",data=places) +
+  geom_text(mapping=aes(x=lon, y=lat, label=name), color="red", nudge_y=1, data=places)
+```
+
+# Building a Map Manually
+
+We can always build our own map from scratch.  Let's give that a try.
+
+```{r statedata}
+states <- map_data("state")
+```
+```{r statemap}
+ggplot(data=states, mapping=aes(x=long, y=lat, group=group)) +
+  geom_polygon() +
+  coord_map() +
+  theme(axis.ticks=element_blank(), axis.text=element_blank(), axis.title=element_blank()) +
+  theme(panel.background=element_blank())
+
+```
+
+# Choropleth Maps
+
+Let's load the college dataset from Data Management.
+
+```{r college}
+college <- read_csv('https://s3.amazonaws.com/chapple-datasets/college.csv')
+college <- college %>%
+  mutate(state=as.factor(state), region=as.factor(region),
+         highest_degree=as.factor(highest_degree),
+         control=as.factor(control), gender=as.factor(gender),
+         loan_default_rate=as.numeric(loan_default_rate))
+
+```
+
+```{r college_calc}
+college_summary <- college %>%
+  group_by(state) %>%
+  summarize(schools=n())
+```
+
+I can use the setNames function along with R’s built-in state.name and state.abb vectors to clean up the fact that one table has full state names and the other has abbreviations.
+
+```{r statenames}
+college_summary <- college_summary %>%
+  mutate(region=as.character(setNames(str_to_lower(state.name), state.abb)[as.character(state)]))
+
+college_summary <- college_summary %>%
+  mutate(region=ifelse(as.character(state)=="DC", "district of columbia",region)) 
+
+mapdata <- merge(states, college_summary, by="region")
+```
+
+Let's start with a basic state map.
+
+```{r basicstatemap}
+ggplot(mapdata) +
+  geom_polygon(aes(x=long,y=lat,group=group)) +
+  coord_map() +
+  theme(plot.background=element_blank(), panel.background = element_blank(), axis.title=element_blank(), axis.ticks=element_blank(), axis.text=element_blank()) 
+```
+Then we can adjust the fill aesthetic based upon the schools variable.
+
+```{r choropleth}
+ggplot(mapdata) +
+  geom_polygon(aes(x=long,y=lat,group=group, fill=schools)) +
+  coord_map() +
+  theme(plot.background=element_blank(), panel.background = element_blank(), axis.title=element_blank(), axis.ticks=element_blank(), axis.text=element_blank()) 
+```
+
+And, finally, let's use a more traditional color scale.
+
+```{r stateheatmap}
+ggplot(mapdata) +
+  geom_polygon(aes(x=long,y=lat,group=group, fill=schools)) +
+  coord_map() +
+  theme(plot.background=element_blank(), panel.background = element_blank(), axis.title=element_blank(), axis.ticks=element_blank(), axis.text=element_blank())  +
+  scale_fill_gradient(low = "beige", high = "red")
+
+```

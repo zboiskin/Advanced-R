@@ -1,0 +1,78 @@
+---
+title: "IMDB Data Analysis"
+author: "Mike Chapple"
+date: "1/20/2020"
+output: html_document
+---
+
+In this analysis, I would like to compare ratings of the [Friday the 13th movies](https://en.wikipedia.org/wiki/Friday_the_13th_(franchise)) as the series progressed.  My hypothesis is that the movies got progressively worse as the franchise continued. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, include=FALSE}
+library(tidyverse)
+library(rvest)
+```
+## Preliminary Setup
+*I am conducting this analysis using rvest version `r packageVersion("rvest")`.*
+
+### Seed Dataset
+I have already obtained the movie IDs for the eight Friday the 13th movies from IMDB and loaded them into a seed dataset that I will later populate with the ratings.
+
+```{r seed_data}
+# Friday the 13th movie data
+id <- c('tt0080761', 'tt0082418', 'tt0083972', 'tt0087298', 'tt0089173', 'tt0091080', 'tt0095179', 'tt0097388')
+part <- c('I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII')
+rating <- c(0,0,0,0,0,0,0,0)
+
+# Create a tibble
+movies <- tibble(id, part, rating)
+```
+### Scraping Function
+I am also bringing in the rankIMDB and rankIMDBvector functions that I created in an earlier video for use in this analysis.  The rankIMDB function takes a single movie ID and retrieves the rating value for that movie from IMDB.  The rankIMDBvector function is a vectorized version of that same function.
+
+```{r scraping_function}
+rankIMDB <- function(movie) {
+  url <- paste0('https://www.imdb.com/title/', movie, '/')
+  selector <- 'strong span'
+  page <- read_html(url)
+  
+  rank <- page %>%
+    html_nodes(selector) %>%
+    html_text()
+  
+  return(rank)
+}
+rankIMDBvector <- Vectorize(rankIMDB)
+```
+
+## Scraping IMDB
+I can then simply apply the vectorized function to my dataset using the mutate() verb from dplyr.
+
+```{r scrape}
+movies <- movies %>%
+  mutate(rating=rankIMDBvector(id))
+```
+
+## Results
+Let's take a look at the contents of that dataset.
+
+### Data Table
+Here is the data in tabular form.
+
+```{r datadump, eval=FALSE, echo=FALSE}
+movies
+```
+
+
+### Visualization
+The `ggplot()` library allows me to visualize the results on a simple column graph.
+
+```{r plot}
+ggplot(data=movies) +
+  geom_col(mapping=aes(x=part, y=rating)) 
+```
+## Conclusion
+These results support my hypothesis that **the Friday the 13th franchise decreased in quality as it got longer**, as determined by user reviews on IMDB.
